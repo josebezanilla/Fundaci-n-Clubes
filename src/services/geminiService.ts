@@ -44,23 +44,29 @@ export interface Message {
 }
 
 export class GeminiService {
-  private ai: GoogleGenAI;
-  private chat: any;
+  private ai: GoogleGenAI | null = null;
+  private chat: any = null;
 
   constructor() {
-    // Prioritize the personal key with VITE_ prefix for best compatibility
-    const rawKey = (import.meta as any).env?.VITE_LLAVE_IA_PERSONAL ||
+    this.init();
+  }
+
+  public init() {
+    // Priority: 
+    // 1. process.env.API_KEY (Platform provided via openSelectKey)
+    // 2. VITE_LLAVE_IA_PERSONAL (User's own key in .env)
+    // 3. GEMINI_API_KEY (Standard env var)
+    const rawKey = process.env.API_KEY ||
+                   (import.meta as any).env?.VITE_LLAVE_IA_PERSONAL ||
                    process.env.VITE_LLAVE_IA_PERSONAL ||
                    process.env.LLAVE_IA_PERSONAL ||
                    process.env.GEMINI_API_KEY || 
-                   process.env.API_KEY ||
                    (import.meta as any).env?.VITE_GEMINI_API_KEY || 
                    "";
     const apiKey = rawKey.trim();
     
     if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey.length < 10) {
       console.error("GEMINI_API_KEY is missing or invalid format.");
-      // We throw a very specific error that the UI can catch and explain simply
       throw new Error("CONFIG_ERROR: Falta configurar la llave de la IA.");
     }
     
@@ -69,6 +75,7 @@ export class GeminiService {
   }
 
   private initChat() {
+    if (!this.ai) return;
     try {
       this.chat = this.ai.chats.create({
         model: "gemini-3.1-pro-preview",
@@ -86,13 +93,20 @@ export class GeminiService {
   }
 
   async sendMessage(message: string): Promise<string> {
+    if (!this.chat) this.init();
     try {
       const response: GenerateContentResponse = await this.chat.sendMessage({ message });
       return response.text || "Lo siento, no pude procesar tu solicitud.";
     } catch (error: any) {
       console.error("GeminiService.sendMessage error:", error);
-      // If it's a safety or temporary error, we might want to re-init
-      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+      const errorMsg = error.message?.toLowerCase() || "";
+      
+      // If it's a quota error, we throw a specific one for the UI
+      if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+        throw new Error("QUOTA_EXCEEDED: Has alcanzado el límite de mensajes gratuitos.");
+      }
+
+      if (errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('expired')) {
         this.initChat();
       }
       throw error;
@@ -100,6 +114,7 @@ export class GeminiService {
   }
 
   async *sendMessageStream(message: string) {
+    if (!this.chat) this.init();
     try {
       const stream = await this.chat.sendMessageStream({ message });
       for await (const chunk of stream) {
@@ -108,8 +123,13 @@ export class GeminiService {
       }
     } catch (error: any) {
       console.error("GeminiService.sendMessageStream error:", error);
-      // Re-initialize on certain errors to try and recover the session
-      if (error.message?.includes('dead') || error.message?.includes('expired') || error.message?.includes('not found')) {
+      const errorMsg = error.message?.toLowerCase() || "";
+
+      if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+        throw new Error("QUOTA_EXCEEDED: Has alcanzado el límite de mensajes gratuitos.");
+      }
+
+      if (errorMsg.includes('dead') || errorMsg.includes('expired') || errorMsg.includes('not found')) {
         this.initChat();
       }
       throw error;
