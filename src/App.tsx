@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { LogIn, FileText } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User, db } from './lib/firebase';
 import { setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export interface OrganizationData {
   profile: string;
@@ -22,22 +22,32 @@ export default function App() {
     // Set persistence to local
     setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       
       if (firebaseUser && db) {
-        try {
-          const orgDoc = await getDoc(doc(db, 'organizations', firebaseUser.uid));
-          if (orgDoc.exists()) {
-            setOrgData(orgDoc.data() as OrganizationData);
+        // Use onSnapshot instead of getDoc for better resilience to connection issues
+        const orgDocRef = doc(db, 'organizations', firebaseUser.uid);
+        const unsubscribeOrg = onSnapshot(orgDocRef, (doc) => {
+          if (doc.exists()) {
+            setOrgData(doc.data() as OrganizationData);
+          } else {
+            setOrgData(null);
           }
-        } catch (error) {
+          setLoading(false);
+        }, (error) => {
           console.error("Error loading org data:", error);
-        }
+          // If it's a permission error or similar, we still want to stop loading
+          setLoading(false);
+        });
+
+        return () => {
+          unsubscribeOrg();
+        };
       } else {
         setOrgData(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

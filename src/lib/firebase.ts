@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "placeholder",
@@ -21,7 +21,10 @@ try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     googleProvider = new GoogleAuthProvider();
-    db = getFirestore(app);
+    // Use initializeFirestore with long polling for better compatibility in proxied environments
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
   }
 } catch (err) {
   console.error("Firebase init error:", err);

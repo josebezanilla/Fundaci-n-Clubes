@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { GeminiService, Message } from '../services/geminiService';
 import { cn } from '../utils';
 import { auth, User, db } from '../lib/firebase';
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -57,31 +57,29 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
     }
   }, [clubProfile]);
 
-  const loadSessions = async () => {
+  useEffect(() => {
     if (!user || !db) return;
-    try {
-      const q = query(
-        collection(db, 'sessions'),
-        where('userId', '==', user.uid),
-        orderBy('timestamp', 'desc'),
-        limit(20)
-      );
-      const querySnapshot = await getDocs(q);
+
+    const q = query(
+      collection(db, 'sessions'),
+      where('userId', '==', user.uid),
+      orderBy('timestamp', 'desc'),
+      limit(20)
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const loadedSessions: ChatSession[] = [];
       querySnapshot.forEach((doc) => {
         loadedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
       });
       setSessions(loadedSessions);
-    } catch (error) {
-      console.error("Error loading sessions:", error);
-    }
-  };
+    }, (error) => {
+      console.error("Error listening to sessions:", error);
+    });
 
-  useEffect(() => {
-    if (user) {
-      loadSessions();
-      startNewChat();
-    }
+    startNewChat();
+
+    return () => unsubscribe();
   }, [user]);
 
   const startNewChat = () => {
@@ -114,8 +112,13 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
       setMessages(history);
       setCurrentSessionId(sessionId);
       setShowHistory(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading session:", error);
+      if (error.message?.includes('index')) {
+        alert("Falta un índice en la base de datos para cargar este chat. Por favor, abre la consola del navegador (F12) y haz clic en el enlace que aparece en el error para crearlo.");
+      } else {
+        alert("Hubo un problema al cargar la conversación. Por favor, intenta de nuevo.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +148,6 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
         });
         sessionId = sessionDoc.id;
         setCurrentSessionId(sessionId);
-        loadSessions(); // Refresh list
       }
 
       await addDoc(collection(db, 'chats'), {
