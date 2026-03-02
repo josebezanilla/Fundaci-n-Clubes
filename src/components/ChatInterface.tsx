@@ -64,14 +64,22 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
     const q = query(
       collection(db, 'sessions'),
       where('userId', '==', user.uid),
-      orderBy('timestamp', 'desc'),
-      limit(20)
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const loadedSessions: ChatSession[] = [];
-      querySnapshot.forEach((doc) => {
-        loadedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
+      const loadedSessions: ChatSession[] = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as ChatSession)).sort((a, b) => {
+        const getTime = (ts: any) => {
+          if (!ts) return 0;
+          if (typeof ts.toMillis === 'function') return ts.toMillis();
+          if (ts.seconds) return ts.seconds * 1000;
+          if (ts instanceof Date) return ts.getTime();
+          return 0;
+        };
+        return getTime(b.timestamp) - getTime(a.timestamp);
       });
       setSessions(loadedSessions);
     }, (error) => {
@@ -101,24 +109,41 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
     try {
       const q = query(
         collection(db, 'chats'),
-        where('sessionId', '==', sessionId),
-        orderBy('timestamp', 'asc')
+        where('sessionId', '==', sessionId)
       );
       const querySnapshot = await getDocs(q);
-      const history: Message[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        history.push({ role: data.role, content: data.content });
+      const docs = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).sort((a: any, b: any) => {
+        const getTime = (ts: any) => {
+          if (!ts) return 0;
+          if (typeof ts.toMillis === 'function') return ts.toMillis();
+          if (typeof ts.getTime === 'function') return ts.getTime();
+          if (ts.seconds) return ts.seconds * 1000;
+          if (ts instanceof Date) return ts.getTime();
+          return 0;
+        };
+        return getTime(a.timestamp) - getTime(b.timestamp);
       });
+
+      const history: Message[] = docs.map((data: any) => ({
+        role: data.role,
+        content: data.content
+      }));
+      
       setMessages(history);
       setCurrentSessionId(sessionId);
       setShowHistory(false);
     } catch (error: any) {
       console.error("Error loading session:", error);
-      if (error.code === 'failed-precondition' || error.message?.toLowerCase().includes('index')) {
+      const errorMsg = error.message || "";
+      if (error.code === 'failed-precondition' || errorMsg.toLowerCase().includes('index')) {
         setError("Falta un índice en la base de datos para cargar este chat. Por favor, abre la consola del navegador (F12) y haz clic en el enlace de Firebase para activarlo.");
+      } else if (errorMsg.toLowerCase().includes('permission')) {
+        setError("No tienes permiso para acceder a esta conversación.");
       } else {
-        setError("Hubo un problema al cargar la conversación. Por favor, intenta de nuevo.");
+        setError(`Hubo un problema al cargar la conversación (${error.code || 'Error desconocido'}). Por favor, intenta de nuevo.`);
       }
     } finally {
       setIsLoading(false);
