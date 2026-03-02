@@ -29,8 +29,11 @@ Debes basar todas tus respuestas técnicas en las siguientes leyes chilenas:
 - VERIFICACIÓN DE DATOS: Si el usuario te pregunta datos específicos de SU club (ej: "¿Cuándo vence mi directiva?" o "¿Cuál es mi RUT?"), debes responder: "Como asistente técnico, tengo toda la base legal, pero no tengo acceso a tu carpeta privada del Registro Civil. Para conocer esa fecha exacta, debes revisar tu Certificado de Vigencia emitido por el Registro Civil o el sitio del IND".
 - FINANCIAMIENTO: Ante cualquier mención de falta de recursos, debes sugerir proactivamente explorar la Ley de Donaciones Deportivas o fondos públicos, explicando brevemente los beneficios.
 - SEGURIDAD: Ante consultas sobre conflictos o abusos, cita siempre el Protocolo de la Ley 21.197 y la obligación de tener un encargado institucional.
-- RECOMENDACIONES: Siempre que sea pertinente, utiliza la búsqueda de Google para encontrar y recomendar notas del blog o artículos de https://www.fundacionclubes.org que complementen tu respuesta técnica. 
-- REGLA CRÍTICA DE ENLACES: NO inventes enlaces. Solo recomienda enlaces que hayas encontrado explícitamente a través de las herramientas de búsqueda. Si no estás seguro de un enlace, no lo pongas. No intentes buscar en redes sociales como Instagram, enfócate en la web oficial.
+### REGLA CRÍTICA DE ENLACES Y VERACIDAD:
+- NO INVENTES: No prometas capacitaciones, noticias o secciones que no hayas verificado hoy mismo con la herramienta de búsqueda. 
+- ENLACES DIRECTOS: Siempre que menciones información encontrada en fundacionclubes.org, DEBES incluir el enlace directo (URL) al artículo o sección correspondiente. No digas "revisa la web", entrega el link clickable en formato Markdown: [Nombre del artículo](URL).
+- HONESTIDAD: Si no encuentras información sobre un tema específico (ej: una capacitación de "Lideresas" que no está vigente), di simplemente: "No encontré información vigente sobre [tema] en nuestro sitio web oficial". No prometas que "se publican constantemente" si no lo ves en los resultados actuales.
+- REGLA DE ORO PARA BÚSQUEDAS: Al usar la herramienta de búsqueda, tu prioridad es encontrar el LINK. Si encuentras la info pero no el link, indica que la info es general pero invita a buscar el documento específico en la carpeta de plantillas.
 
 ### MENSAJE DE BIENVENIDA:
 Saluda siempre así: "¡Hola! Soy tu Asistente digital de Fundación Clubes. Estoy aquí para apoyarte en la gestión de tu organización. ¿Qué trámite, acta o proyecto vamos a trabajar hoy?"`;
@@ -62,14 +65,17 @@ export class GeminiService {
     }
     
     this.ai = new GoogleGenAI({ apiKey });
+    this.initChat();
+  }
+
+  private initChat() {
     try {
       this.chat = this.ai.chats.create({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           tools: [
-            { googleSearch: {} },
-            { urlContext: {} }
+            { googleSearch: {} }
           ]
         },
       });
@@ -83,8 +89,12 @@ export class GeminiService {
     try {
       const response: GenerateContentResponse = await this.chat.sendMessage({ message });
       return response.text || "Lo siento, no pude procesar tu solicitud.";
-    } catch (error) {
+    } catch (error: any) {
       console.error("GeminiService.sendMessage error:", error);
+      // If it's a safety or temporary error, we might want to re-init
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        this.initChat();
+      }
       throw error;
     }
   }
@@ -96,8 +106,12 @@ export class GeminiService {
         const c = chunk as GenerateContentResponse;
         yield c.text || "";
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("GeminiService.sendMessageStream error:", error);
+      // Re-initialize on certain errors to try and recover the session
+      if (error.message?.includes('dead') || error.message?.includes('expired') || error.message?.includes('not found')) {
+        this.initChat();
+      }
       throw error;
     }
   }

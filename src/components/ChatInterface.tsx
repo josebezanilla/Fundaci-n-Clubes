@@ -266,7 +266,13 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
     saveMessageToFirestore('user', userMessage);
 
     try {
-      if (!geminiService.current) throw new Error("Service not initialized");
+      if (!geminiService.current) {
+        try {
+          geminiService.current = new GeminiService();
+        } catch (e) {
+          throw new Error("CONFIG_ERROR: No se pudo inicializar el servicio de IA.");
+        }
+      }
       
       let fullResponse = '';
       const modelMessageIndex = messages.length + 1; 
@@ -290,10 +296,14 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
       saveMessageToFirestore('model', fullResponse);
     } catch (error: any) {
       console.error('Error sending message:', error);
-      let errorMessage = 'Lo siento, hubo un error al procesar tu mensaje.';
+      let errorMessage = 'Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo en unos segundos.';
       
       if (error.message?.includes('CONFIG_ERROR') || error.message?.includes('API key not valid')) {
         errorMessage = '¡Hola! No te preocupes por ese cuadro de "Paid Project". Para que el chat funcione gratis, solo debes ir a la pestaña "Secrets" (o "Variables") en el panel izquierdo de este editor y agregar una variable llamada LLAVE_IA_PERSONAL con tu llave de Google AI Studio. Una vez que la agregues, el chat se activará automáticamente.';
+      } else if (error.message?.toLowerCase().includes('safety') || error.message?.toLowerCase().includes('blocked')) {
+        errorMessage = 'Lo siento, el sistema de seguridad de la IA ha filtrado esta respuesta. Por favor, intenta reformular tu pregunta de una manera más técnica o administrativa.';
+      } else if (error.message?.toLowerCase().includes('quota') || error.message?.toLowerCase().includes('429')) {
+        errorMessage = 'Hemos alcanzado el límite de mensajes gratuitos por ahora. Por favor, espera un minuto antes de intentar de nuevo.';
       }
       
       // Remove the empty bubble we added and show the error
