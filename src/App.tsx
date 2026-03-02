@@ -3,15 +3,41 @@ import ChatInterface from './components/ChatInterface';
 import Sidebar from './components/Sidebar';
 import { motion } from 'motion/react';
 import { LogIn, FileText } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
+import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User, db } from './lib/firebase';
+import { setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+export interface OrganizationData {
+  profile: string;
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [orgData, setOrgData] = useState<OrganizationData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    
+    // Set persistence to local
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      
+      if (firebaseUser && db) {
+        try {
+          const orgDoc = await getDoc(doc(db, 'organizations', firebaseUser.uid));
+          if (orgDoc.exists()) {
+            setOrgData(orgDoc.data() as OrganizationData);
+          }
+        } catch (error) {
+          console.error("Error loading org data:", error);
+        }
+      } else {
+        setOrgData(null);
+      }
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -22,9 +48,36 @@ export default function App() {
       return;
     }
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
+      await setPersistence(auth, browserLocalPersistence);
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Login success:", result.user.email);
+    } catch (err: any) {
       console.error("Login error:", err);
+      let errorMsg = "Error al iniciar sesión.";
+      if (err.code === 'auth/unauthorized-domain') {
+        errorMsg = "Dominio no autorizado. Por favor, agrega 'ia.fundacionclubes.org' en la consola de Firebase (Authentication > Settings > Authorized Domains).";
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        errorMsg = "La ventana de login se cerró antes de completar el proceso.";
+      } else if (err.code === 'auth/operation-not-allowed') {
+        errorMsg = "El método de login con Google no está habilitado en Firebase.";
+      } else {
+        errorMsg = `Error técnico: ${err.code || err.message}`;
+      }
+      alert(errorMsg);
+    }
+  };
+
+  const handleUpdateOrg = async (data: OrganizationData) => {
+    if (!user || !db) return;
+    try {
+      await setDoc(doc(db, 'organizations', user.uid), data);
+      setOrgData(data);
+      // Also update localStorage for immediate context in ChatInterface if needed
+      localStorage.setItem('club_profile', data.profile);
+      window.dispatchEvent(new Event('profileUpdated'));
+    } catch (error) {
+      console.error("Error saving org data:", error);
+      alert("No se pudo guardar la información. Asegúrate de haber activado Firestore en tu consola de Firebase.");
     }
   };
 
@@ -116,7 +169,11 @@ export default function App() {
           transition={{ duration: 0.5 }}
           className="order-2 lg:order-1 lg:w-72 flex-shrink-0 sticky lg:top-24"
         >
-          <Sidebar />
+          <Sidebar 
+            orgData={orgData} 
+            onUpdateOrg={handleUpdateOrg} 
+            isLoggedIn={!!user}
+          />
         </motion.div>
 
         {/* Chat Interface - Main area */}
@@ -126,7 +183,7 @@ export default function App() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="flex-1 order-1 lg:order-2 w-full min-w-0"
         >
-          <ChatInterface user={user} />
+          <ChatInterface user={user} clubProfile={orgData?.profile || null} />
         </motion.div>
       </main>
     </div>

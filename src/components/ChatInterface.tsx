@@ -17,13 +17,13 @@ interface ChatSession {
 
 interface ChatInterfaceProps {
   user: User | null;
+  clubProfile: string | null;
 }
 
-export default function ChatInterface({ user }: ChatInterfaceProps) {
+export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [clubProfile, setClubProfile] = useState<string | null>(null);
   const [clubName, setClubName] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -39,19 +39,23 @@ export default function ChatInterface({ user }: ChatInterfaceProps) {
       console.error("Failed to initialize GeminiService:", e);
       setInitError("Error de configuración: La llave de IA no está disponible.");
     }
-    
-    const savedProfile = localStorage.getItem('club_profile');
-    if (savedProfile) {
-      setClubProfile(savedProfile);
-      const nameMatch = savedProfile.match(/(?:soy|somos|club|organización)\s+(?:del\s+|de\s+la\s+|de\s+)?([^.,\n]+)/i);
+  }, []);
+
+  useEffect(() => {
+    if (clubProfile) {
+      const nameMatch = clubProfile.match(/(?:soy|somos|club|organización)\s+(?:del\s+|de\s+la\s+|de\s+)?([^.,\n]+)/i);
       if (nameMatch && nameMatch[1]) {
         let name = nameMatch[1].trim();
         name = name.replace(/^(?:del|de la|de)\s+/i, '');
         name = name.charAt(0).toUpperCase() + name.slice(1);
         setClubName(name);
+      } else {
+        setClubName(null);
       }
+    } else {
+      setClubName(null);
     }
-  }, []);
+  }, [clubProfile]);
 
   const loadSessions = async () => {
     if (!user || !db) return;

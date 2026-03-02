@@ -1,45 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, FileText, Gavel, Users, ExternalLink, ShieldAlert, FolderOpen, Settings, Trash2, Info, Edit2, Check, X, Lightbulb } from 'lucide-react';
+import { OrganizationData } from '../App';
 
-export default function Sidebar() {
-  const [clubProfile, setClubProfile] = useState<string | null>(null);
+interface SidebarProps {
+  orgData: OrganizationData | null;
+  onUpdateOrg: (data: OrganizationData) => void;
+  isLoggedIn: boolean;
+}
+
+export default function Sidebar({ orgData, onUpdateOrg, isLoggedIn }: SidebarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem('club_profile');
-    setClubProfile(savedProfile);
-    if (savedProfile) setEditValue(savedProfile);
-
-    const handleStorage = () => {
-      const profile = localStorage.getItem('club_profile');
-      setClubProfile(profile);
-      if (profile) setEditValue(profile);
-    };
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('profileUpdated', handleStorage);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('profileUpdated', handleStorage);
-    };
-  }, []);
+    if (orgData) {
+      setEditValue(orgData.profile);
+    } else {
+      setEditValue('');
+    }
+  }, [orgData]);
 
   const handleResetProfile = () => {
     if (confirm('¿Estás seguro de que quieres borrar la información de tu club? El asistente dejará de tener este contexto personalizado.')) {
-      localStorage.removeItem('club_profile');
-      setClubProfile(null);
-      setEditValue('');
-      window.location.reload();
+      onUpdateOrg({ profile: '' });
+      setIsEditing(false);
     }
   };
 
   const handleSaveProfile = () => {
     if (editValue.trim()) {
-      localStorage.setItem('club_profile', editValue.trim());
-      setClubProfile(editValue.trim());
+      onUpdateOrg({ profile: editValue.trim() });
       setIsEditing(false);
-      window.dispatchEvent(new Event('profileUpdated'));
     }
   };
 
@@ -91,14 +82,16 @@ export default function Sidebar() {
           <div className="flex items-center gap-1">
             {!isEditing ? (
               <>
-                <button 
-                  onClick={() => setIsEditing(true)}
-                  className="p-1.5 text-slate-400 hover:text-brand-primary transition-colors"
-                  title="Editar perfil"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                {clubProfile && (
+                {isLoggedIn && (
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="p-1.5 text-slate-400 hover:text-brand-primary transition-colors"
+                    title="Editar perfil"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+                {orgData?.profile && (
                   <button 
                     onClick={handleResetProfile}
                     className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
@@ -120,7 +113,7 @@ export default function Sidebar() {
                 <button 
                   onClick={() => {
                     setIsEditing(false);
-                    setEditValue(clubProfile || '');
+                    setEditValue(orgData?.profile || '');
                   }}
                   className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
                   title="Cancelar"
@@ -140,13 +133,13 @@ export default function Sidebar() {
             placeholder="Nombre del club, comuna, deportes, desafíos..."
           />
         ) : (
-          clubProfile ? (
+          orgData?.profile ? (
             <p className="text-xs text-slate-700 italic line-clamp-4">
-              "{clubProfile}"
+              "{orgData.profile}"
             </p>
           ) : (
             <p className="text-xs text-slate-400 italic">
-              Llena acá los datos elementales de tu club: nombre, comuna, deportes, otros.
+              {isLoggedIn ? "Llena acá los datos elementales de tu club: nombre, comuna, deportes, otros." : "Inicia sesión para guardar la información de tu club."}
             </p>
           )
         )}
