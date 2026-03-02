@@ -331,7 +331,7 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
           geminiService.current = new GeminiService();
         } catch (e: any) {
           if (e.message?.includes('CONFIG_ERROR')) {
-            setError("Falta configurar la llave de la IA. Puedes configurar tu propia llave de Google AI Studio para continuar sin límites.");
+            setError("Error de configuración: No se pudo inicializar el servicio de IA. Por favor, contacta al administrador.");
             return;
           }
           throw e;
@@ -364,13 +364,11 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
       const errorMsg = error.message?.toLowerCase() || "";
       
       if (errorMsg.includes('config_error') || errorMsg.includes('api key not valid')) {
-        errorMessage = 'Falta configurar la llave de la IA. Puedes configurar tu propia llave de Google AI Studio para continuar.';
-        setError(errorMessage);
+        errorMessage = 'Error de configuración en el servidor de IA. Por favor, intenta más tarde.';
       } else if (errorMsg.includes('safety') || errorMsg.includes('blocked')) {
         errorMessage = 'Lo siento, el sistema de seguridad de la IA ha filtrado esta respuesta. Por favor, intenta reformular tu pregunta de una manera más técnica o administrativa.';
       } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
-        errorMessage = 'Hemos alcanzado el límite de mensajes gratuitos por ahora. Para seguir conversando sin límites, puedes configurar tu propia llave de API de Google AI Studio.';
-        setError(errorMessage);
+        errorMessage = 'Hemos alcanzado el límite de mensajes por ahora. Por favor, espera un minuto antes de intentar de nuevo.';
       }
       
       // Remove the empty bubble we added and show the error
@@ -504,19 +502,6 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
           
           <div className="flex items-center gap-2">
             <button 
-              onClick={handleSelectKey}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-[10px] font-bold uppercase tracking-widest border",
-                hasCustomKey 
-                  ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/30 hover:bg-emerald-500/30" 
-                  : "bg-white/10 text-white hover:bg-white/20 border-white/5"
-              )}
-              title={hasCustomKey ? "Llave personalizada activa" : "Configurar llave propia"}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">{hasCustomKey ? 'Activa' : 'Sin Límites'}</span>
-            </button>
-            <button 
               onClick={startNewChat}
               className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors text-[10px] font-bold uppercase tracking-widest border border-white/5"
             >
@@ -529,17 +514,9 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
         {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {initError && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex flex-col gap-3 text-red-600 text-sm">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="w-5 h-5 shrink-0" />
-              <p className="font-medium">{initError}</p>
-            </div>
-            <button
-              onClick={handleSelectKey}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition-colors w-fit ml-8"
-            >
-              Configurar mi propia llave ahora
-            </button>
+          <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-start gap-3 text-red-600 text-sm">
+            <ShieldAlert className="w-5 h-5 shrink-0" />
+            <p>{initError}</p>
           </div>
         )}
         {messages.map((msg, idx) => (
@@ -676,33 +653,12 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
               <p className="text-slate-600 text-sm leading-relaxed mb-6">
                 {error}
               </p>
-              <div className="flex flex-col gap-3">
-                {(error?.includes('llave') || error?.includes('límite') || error?.includes('API')) && (
-                  <button
-                    onClick={handleSelectKey}
-                    className="w-full bg-brand-primary text-white font-bold py-3 rounded-xl hover:bg-brand-primary/90 transition-all shadow-md flex items-center justify-center gap-2"
-                  >
-                    <CreditCard className="w-5 h-5" />
-                    Configurar mi propia llave (Pago/Sin límites)
-                  </button>
-                )}
-                <button
-                  onClick={() => setError(null)}
-                  className="w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-200 transition-all"
-                >
-                  Cerrar
-                </button>
-                {(error?.includes('llave') || error?.includes('límite')) && (
-                  <a 
-                    href="https://ai.google.dev/gemini-api/docs/billing" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-[10px] text-brand-primary text-center hover:underline"
-                  >
-                    Ver documentación sobre facturación y límites
-                  </a>
-                )}
-              </div>
+              <button
+                onClick={() => setError(null)}
+                className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl hover:bg-brand-primary/90 transition-all active:scale-[0.98]"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
