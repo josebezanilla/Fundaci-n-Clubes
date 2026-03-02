@@ -29,6 +29,7 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
   const [showHistory, setShowHistory] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const geminiService = useRef<GeminiService | null>(null);
 
@@ -114,10 +115,10 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
       setShowHistory(false);
     } catch (error: any) {
       console.error("Error loading session:", error);
-      if (error.message?.includes('index')) {
-        alert("Falta un índice en la base de datos para cargar este chat. Por favor, abre la consola del navegador (F12) y haz clic en el enlace que aparece en el error para crearlo.");
+      if (error.code === 'failed-precondition' || error.message?.toLowerCase().includes('index')) {
+        setError("Falta un índice en la base de datos para cargar este chat. Por favor, abre la consola del navegador (F12) y haz clic en el enlace de Firebase para activarlo.");
       } else {
-        alert("Hubo un problema al cargar la conversación. Por favor, intenta de nuevo.");
+        setError("Hubo un problema al cargar la conversación. Por favor, intenta de nuevo.");
       }
     } finally {
       setIsLoading(false);
@@ -564,6 +565,29 @@ export default function ChatInterface({ user, clubProfile }: ChatInterfaceProps)
           Asistente Técnico para la Autogestión Deportiva • Fundación Clubes
         </p>
       </form>
+
+      {/* Error Modal */}
+      {error && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 text-red-600 mb-4">
+                <ShieldAlert className="w-6 h-6" />
+                <h3 className="font-bold text-lg">Atención</h3>
+              </div>
+              <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                {error}
+              </p>
+              <button
+                onClick={() => setError(null)}
+                className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl hover:bg-brand-primary/90 transition-all active:scale-[0.98]"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
 );
